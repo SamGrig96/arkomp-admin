@@ -90,16 +90,29 @@ every call — `http://localhost:5173` is there by default.
 
 ## Deploying
 
-`npm run build` produces static files — any static host serves them. The
-`Dockerfile` builds them and serves them with nginx:
+`npm run build` produces static files — any static host serves them, free.
+[Cloudflare Pages](https://pages.cloudflare.com) is a good fit: point it at this
+repository, build command `npm run build`, output directory `dist`, and set
+`VITE_API_URL` and `VITE_SITE_URL` as build-time variables. Netlify works the
+same way.
+
+Routing is by URL hash, so the host needs no SPA rewrite rules — every request
+is for `/`.
+
+The `Dockerfile` is there for hosts that want a container instead; it serves the
+built files with nginx.
 
 ```bash
 docker build --build-arg VITE_API_URL=https://api.example.com -t arkomp-admin .
 ```
 
-Two things to get right wherever it lands: the API needs the admin's origin in
-`Cors__Origins`, and it needs a real `Auth__SigningKey` — otherwise every API
-restart signs everyone out.
+Two things to get right wherever it lands: the API needs this app's public
+origin in `Cors__Origins`, and it needs a real `Auth__SigningKey` — otherwise
+every API restart signs everyone out.
+
+If the API is on a free host that sleeps, the first sign-in after a quiet spell
+can take the better part of a minute. That is the API waking up, not the panel
+hanging.
 
 ## Layout
 
