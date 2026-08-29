@@ -1,7 +1,10 @@
 import { useRef, useState } from "react";
 import * as api from "../lib/api";
-import type { AdminImage } from "../lib/types";
+import { describeError } from "../lib/errors";
+import { useT } from "../lib/i18n";
 import { move } from "../lib/move";
+import type { AdminImage } from "../lib/types";
+import { CONTENT_LOCALES, CONTENT_LOCALE_LABELS } from "../lib/types";
 
 const kb = (bytes: number) =>
   bytes > 1024 * 1024
@@ -24,6 +27,7 @@ export function Photos({
   onChanged: (images: AdminImage[]) => void;
   onError: (message: string) => void;
 }) {
+  const t = useT();
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
@@ -32,7 +36,7 @@ export function Photos({
   async function upload(files: FileList | File[]) {
     const list = [...files].filter((f) => f.type.startsWith("image/"));
     if (list.length === 0) {
-      onError("Ընտրված ֆայլերը նկար չեն։");
+      onError(t.photos.notImages);
       return;
     }
 
@@ -44,7 +48,7 @@ export function Photos({
       }
       onChanged((await api.getProduct(slug)).images);
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Վերբեռնումը չհաջողվեց։");
+      onError(describeError(e, t, t.photos.uploadFailed));
     } finally {
       setBusy(false);
       setProgress("");
@@ -57,18 +61,18 @@ export function Photos({
     try {
       await api.reorderImages(slug, next.map((i) => i.id));
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Հերթականությունը չպահվեց։");
+      onError(describeError(e, t, t.photos.orderFailed));
       onChanged(images);
     }
   }
 
   async function remove(image: AdminImage) {
-    if (!confirm("Ջնջե՞լ այս նկարը։ Գործողությունն անշրջելի է։")) return;
+    if (!confirm(t.photos.confirmDelete)) return;
     try {
       await api.deleteImage(image.id);
       onChanged(images.filter((i) => i.id !== image.id));
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Չհաջողվեց ջնջել։");
+      onError(describeError(e, t, t.photos.deleteFailed));
     }
   }
 
@@ -76,7 +80,7 @@ export function Photos({
     try {
       await api.updateImage(image.id, { alt });
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Alt տեքստը չպահվեց։");
+      onError(describeError(e, t, t.photos.altFailed));
     }
   }
 
@@ -84,11 +88,8 @@ export function Photos({
     <div className="card">
       <div className="card__head">
         <div>
-          <h2>Լուսանկարներ</h2>
-          <p>
-            Առաջին նկարը քարտի շապիկն է։ Մնացածը երևում են ապրանքի էջի
-            պատկերասրահում։
-          </p>
+          <h2>{t.photos.title}</h2>
+          <p>{t.photos.lead}</p>
         </div>
       </div>
 
@@ -106,11 +107,9 @@ export function Photos({
           void upload(e.dataTransfer.files);
         }}
       >
-        {busy
-          ? `Վերբեռնվում է… ${progress}`
-          : "Քաշիր նկարները այստեղ, կամ սեղմիր՝ ընտրելու համար"}
+        {busy ? t.photos.uploading(progress) : t.photos.drop}
         <div className="muted" style={{ marginTop: 6, fontSize: 13 }}>
-          JPEG, PNG, WebP, AVIF կամ GIF · մինչև 8 ՄԲ
+          {t.photos.formats}
         </div>
         <input
           ref={input}
@@ -131,26 +130,23 @@ export function Photos({
             <div className="photo" key={image.id}>
               <img className="photo__img" src={image.url} alt="" />
               <div className="photo__body">
-                <input
-                  type="text"
-                  defaultValue={image.alt.hy ?? ""}
-                  placeholder="Alt՝ հայերեն"
-                  onBlur={(e) =>
-                    void saveAlt(image, { ...image.alt, hy: e.target.value })
-                  }
-                />
-                <input
-                  type="text"
-                  defaultValue={image.alt.ru ?? ""}
-                  placeholder="Alt՝ ռուսերեն"
-                  onBlur={(e) =>
-                    void saveAlt(image, { ...image.alt, ru: e.target.value })
-                  }
-                />
+                {/* Alt text belongs to the content languages, not to the panel's,
+                    so these stay labelled in the language they are written in. */}
+                {CONTENT_LOCALES.map((locale) => (
+                  <input
+                    key={locale}
+                    type="text"
+                    defaultValue={image.alt[locale] ?? ""}
+                    placeholder={t.photos.altFor(CONTENT_LOCALE_LABELS[locale])}
+                    onBlur={(e) =>
+                      void saveAlt(image, { ...image.alt, [locale]: e.target.value })
+                    }
+                  />
+                ))}
                 <div className="photo__foot">
                   <button
                     className="btn btn--ghost btn--icon"
-                    title="Առաջ"
+                    title={t.photos.moveBack}
                     disabled={i === 0}
                     onClick={() => void reorder(i, i - 1)}
                   >
@@ -158,7 +154,7 @@ export function Photos({
                   </button>
                   <button
                     className="btn btn--ghost btn--icon"
-                    title="Հետ"
+                    title={t.photos.moveForward}
                     disabled={i === images.length - 1}
                     onClick={() => void reorder(i, i + 1)}
                   >
@@ -166,7 +162,7 @@ export function Photos({
                   </button>
                   <button
                     className="btn btn--danger btn--icon"
-                    title="Ջնջել"
+                    title={t.common.remove}
                     onClick={() => void remove(image)}
                   >
                     ✕
@@ -175,7 +171,7 @@ export function Photos({
                 </div>
                 {i === 0 ? (
                   <span className="badge badge--cover" style={{ marginTop: 8 }}>
-                    Շապիկ
+                    {t.photos.cover}
                   </span>
                 ) : null}
               </div>

@@ -1,9 +1,13 @@
 import { useState } from "react";
 import * as api from "../lib/api";
+import { describeError } from "../lib/errors";
+import { useT } from "../lib/i18n";
 import type { User } from "../lib/types";
 import { Field } from "./fields";
+import { LocaleSwitch } from "./LocaleSwitch";
 
 export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
+  const t = useT();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +22,7 @@ export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
       api.setToken(result.token);
       onSignedIn(result.user);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Մուտքը չհաջողվեց։");
+      setError(describeError(e, t, t.login.failed));
     } finally {
       setBusy(false);
     }
@@ -27,12 +31,16 @@ export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
   return (
     <div className="login">
       <form className="login__card" onSubmit={submit}>
-        <h1>ԱՐԿՈՄՊ · կառավարում</h1>
-        <p>Տեսականու խմբագրման վահանակ</p>
+        <div className="login__lang">
+          <LocaleSwitch />
+        </div>
+
+        <h1>{t.login.title}</h1>
+        <p>{t.login.lead}</p>
 
         {error ? <div className="note note--error">{error}</div> : null}
 
-        <Field label="Օգտանուն">
+        <Field label={t.login.username}>
           <input
             type="text"
             value={username}
@@ -42,7 +50,7 @@ export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
           />
         </Field>
 
-        <Field label="Գաղտնաբառ">
+        <Field label={t.login.password}>
           <input
             type="password"
             value={password}
@@ -56,7 +64,7 @@ export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
           className="btn btn--primary"
           disabled={busy || !username || !password}
         >
-          {busy ? "Մուտք…" : "Մուտք"}
+          {busy ? t.login.submitting : t.login.submit}
         </button>
       </form>
     </div>

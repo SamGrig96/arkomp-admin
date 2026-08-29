@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useT } from "../lib/i18n";
 import { move } from "../lib/move";
 
 /** A labelled input with room for a hint and a validation message. */
@@ -91,6 +92,7 @@ export function StringList({
   placeholder?: string;
   addLabel: string;
 }) {
+  const t = useT();
   const set = (i: number, value: string) =>
     onChange(items.map((item, at) => (at === i ? value : item)));
 
@@ -117,7 +119,7 @@ export function StringList({
           <button
             type="button"
             className="btn btn--danger btn--icon"
-            title="Ջնջել"
+            title={t.common.remove}
             onClick={() => onChange(items.filter((_, at) => at !== i))}
           >
             ✕
@@ -145,12 +147,13 @@ export function MoveButtons({
   count: number;
   onMove: (from: number, to: number) => void;
 }) {
+  const t = useT();
   return (
     <>
       <button
         type="button"
         className="btn btn--ghost btn--icon"
-        title="Վերև"
+        title={t.common.up}
         disabled={index === 0}
         onClick={() => onMove(index, index - 1)}
       >
@@ -159,7 +162,7 @@ export function MoveButtons({
       <button
         type="button"
         className="btn btn--ghost btn--icon"
-        title="Ներքև"
+        title={t.common.down}
         disabled={index === count - 1}
         onClick={() => onMove(index, index + 1)}
       >

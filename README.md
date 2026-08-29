@@ -12,7 +12,8 @@ arkomp-admin  ──writes──>  arkomp-api  <──reads──  arkomp-web
 ```
 
 React + Vite, TypeScript, no UI framework and no router — four screens do not
-need one.
+need one. The panel speaks Armenian and Russian, switched from the top bar and
+remembered per browser.
 
 ## Run it
 
@@ -45,6 +46,11 @@ who it is for / how to choose" rows, the numbered advantage cards, the spec
 labels and the model names. A language with an empty title is not sent to the
 site, so a half-translated group is fine.
 
+The language of the panel and the language being edited are separate choices —
+the Russian copy can perfectly well be written with Armenian buttons around it.
+The copy tabs are therefore labelled in the languages themselves (Հայերեն,
+Русский) and stay that way whichever language the panel is set to.
+
 **Settings** — slug (the page's URL), direction, published, and shown on the home
 page. Renaming a slug changes the address of the live page.
 
@@ -65,6 +71,10 @@ are not runtime settings.
 | --- | --- | --- |
 | `VITE_API_URL` | `http://localhost:5080` | The catalogue API this writes to |
 | `VITE_SITE_URL` | `http://localhost:3000` | Only for the "view on the site" links |
+
+The panel picks its language from what you last chose, falling back to the
+browser’s. Adding a third one means adding a block to `src/lib/i18n.ts`;
+TypeScript then lists every string still missing from it.
 
 The API must list this app's origin under `Cors__Origins` or the browser blocks
 every call — `http://localhost:5173` is there by default.
@@ -103,8 +113,12 @@ src/
     ProductEditor.tsx     settings, copy per language, repeating blocks
     Photos.tsx            upload, order, alt text, delete
     fields.tsx            the small form pieces shared by the screens
+    I18nProvider.tsx      holds the panel's language
+    LocaleSwitch.tsx      the ՀԱՅ / РУС switch
   lib/
     api.ts                every call to the API, plus token handling
+    i18n.ts               every string in the panel, in both languages
+    errors.ts             turns a failed call into a sentence
     types.ts              mirrors the API's DTOs
     site.ts               where the public site lives
 ```

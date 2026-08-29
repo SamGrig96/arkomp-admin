@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
+import { describeError } from "../lib/errors";
+import { useI18n, type Strings } from "../lib/i18n";
+import { move } from "../lib/move";
 import { SITE_URL } from "../lib/site";
 import type {
   AdminFamily,
@@ -10,9 +13,12 @@ import type {
   Locale,
   OverviewRow,
 } from "../lib/types";
-import { emptyTranslation, LOCALES, LOCALE_LABELS } from "../lib/types";
+import {
+  CONTENT_LOCALES,
+  CONTENT_LOCALE_LABELS,
+  emptyTranslation,
+} from "../lib/types";
 import { Field, MoveButtons, StringList, TextArea, TextField } from "./fields";
-import { move } from "../lib/move";
 import { Photos } from "./Photos";
 
 type Draft = {
@@ -29,7 +35,7 @@ const toDraft = (product: AdminProduct): Draft => ({
   isFeatured: product.isFeatured,
   isPublished: product.isPublished,
   translations: Object.fromEntries(
-    LOCALES.map((locale) => [
+    CONTENT_LOCALES.map((locale) => [
       locale,
       product.translations.find((t) => t.locale === locale) ?? emptyTranslation(locale),
     ]),
@@ -42,7 +48,7 @@ const blankDraft = (familySlug: string): Draft => ({
   isFeatured: false,
   isPublished: true,
   translations: Object.fromEntries(
-    LOCALES.map((locale) => [locale, emptyTranslation(locale)]),
+    CONTENT_LOCALES.map((locale) => [locale, emptyTranslation(locale)]),
   ),
 });
 
@@ -60,6 +66,7 @@ export function ProductEditor({
   onError: (message: string) => void;
   onSaved: (message: string) => void;
 }) {
+  const { t, locale: uiLocale } = useI18n();
   const isNew = slug === null;
 
   const [draft, setDraft] = useState<Draft | null>(
@@ -81,9 +88,9 @@ export function ProductEditor({
       setSaved(toDraft(product));
       setImages(product.images);
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Չհաջողվեց բեռնել ապրանքը։");
+      onError(describeError(e, t, t.editor.loadFailed));
     }
-  }, [slug, onError]);
+  }, [slug, onError, t]);
 
   // Fetching on mount: the setState calls inside load() happen after the await,
   // which the rule cannot see.
@@ -105,7 +112,7 @@ export function ProductEditor({
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  if (!draft) return <div className="empty">Բեռնվում է…</div>;
+  if (!draft) return <div className="empty">{t.app.loading}</div>;
 
   const patch = (changes: Partial<Draft>) => setDraft({ ...draft, ...changes });
 
@@ -124,12 +131,12 @@ export function ProductEditor({
     setBusy(true);
     setFieldErrors({});
     try {
-      const translations = LOCALES.map((l) => draft!.translations[l]).filter(
-        (t) => t.title.trim() !== "",
+      const translations = CONTENT_LOCALES.map((l) => draft!.translations[l]).filter(
+        (item) => item.title.trim() !== "",
       );
 
       if (translations.length === 0) {
-        setFieldErrors({ title: ["Առնվազն մեկ լեզվով վերնագիր պետք է լինի։"] });
+        setFieldErrors({ title: [t.editor.needTitle] });
         return;
       }
 
@@ -141,7 +148,7 @@ export function ProductEditor({
           isPublished: draft!.isPublished,
           translations,
         });
-        onSaved("Ապրանքախումբը ստեղծվեց։");
+        onSaved(t.editor.created);
         onDone();
         return;
       }
@@ -154,32 +161,26 @@ export function ProductEditor({
         translations,
       });
       setSaved(draft);
-      onSaved("Պահպանվեց։");
+      onSaved(t.editor.saved);
       if (draft!.slug.trim() !== slug) onDone();
     } catch (e) {
       if (e instanceof api.ApiError && Object.keys(e.fields).length > 0) {
         setFieldErrors(e.fields);
       }
-      onError(e instanceof Error ? e.message : "Չհաջողվեց պահել։");
+      onError(describeError(e, t, t.editor.saveFailed));
     } finally {
       setBusy(false);
     }
   }
 
   async function remove() {
-    if (
-      !confirm(
-        `Ջնջե՞լ «${copy.title || draft!.slug}» ապրանքախումբը իր բոլոր նկարներով։ ` +
-          "Գործողությունն անշրջելի է։",
-      )
-    )
-      return;
+    if (!confirm(t.editor.confirmDelete(copy.title || draft!.slug))) return;
     try {
       await api.deleteProduct(slug!);
-      onSaved("Ջնջվեց։");
+      onSaved(t.editor.deleted);
       onDone();
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Չհաջողվեց ջնջել։");
+      onError(describeError(e, t, t.editor.deleteFailed));
     }
   }
 
@@ -189,22 +190,22 @@ export function ProductEditor({
     <>
       <div className="page__head">
         <div>
-          <h1>{isNew ? "Նոր ապրանքախումբ" : copy.title || draft.slug}</h1>
-          <p className="list__slug">{draft.slug || "slug դեռ լրացված չէ"}</p>
+          <h1>{isNew ? t.editor.newTitle : copy.title || draft.slug}</h1>
+          <p className="list__slug">{draft.slug || t.editor.noSlug}</p>
         </div>
         <div className="page__actions">
           {!isNew ? (
             <a
               className="btn btn--ghost"
-              href={`${SITE_URL}/hy/products/${draft.slug}`}
+              href={`${SITE_URL}/${uiLocale}/products/${draft.slug}`}
               target="_blank"
               rel="noreferrer"
             >
-              Տեսնել կայքում ↗
+              {t.editor.viewOnSite}
             </a>
           ) : null}
           <button className="btn btn--ghost" onClick={onDone}>
-            ← Ցուցակ
+            {t.editor.back}
           </button>
         </div>
       </div>
@@ -213,15 +214,15 @@ export function ProductEditor({
       <div className="card">
         <div className="card__head">
           <div>
-            <h2>Կարգավորումներ</h2>
-            <p>Slug-ը կայքի հասցեն է — փոխելը փոխում է էջի URL-ը։</p>
+            <h2>{t.editor.settingsTitle}</h2>
+            <p>{t.editor.settingsLead}</p>
           </div>
         </div>
 
         <div className="row">
           <TextField
-            label="Slug"
-            hint="լատինատառ, առանց բացատների"
+            label={t.editor.slug}
+            hint={t.editor.slugHint}
             value={draft.slug}
             error={firstError("slug")}
             placeholder="rhetine-khoghovakner"
@@ -230,14 +231,14 @@ export function ProductEditor({
             }
           />
 
-          <Field label="Ուղղություն" error={firstError("familySlug")}>
+          <Field label={t.editor.family} error={firstError("familySlug")}>
             <select
               value={draft.familySlug}
               onChange={(e) => patch({ familySlug: e.target.value })}
             >
               {families.map((f) => (
                 <option key={f.slug} value={f.slug}>
-                  {f.labels.hy ?? f.slug}
+                  {f.labels[uiLocale] ?? f.slug}
                 </option>
               ))}
             </select>
@@ -251,7 +252,7 @@ export function ProductEditor({
               checked={draft.isPublished}
               onChange={(e) => patch({ isPublished: e.target.checked })}
             />
-            Հրապարակված է կայքում
+            {t.editor.published}
           </label>
           <label className="check">
             <input
@@ -259,7 +260,7 @@ export function ProductEditor({
               checked={draft.isFeatured}
               onChange={(e) => patch({ isFeatured: e.target.checked })}
             />
-            Ցույց տալ գլխավոր էջում
+            {t.editor.featured}
           </label>
         </div>
       </div>
@@ -269,98 +270,92 @@ export function ProductEditor({
         <div className="card">
           <div className="card__head">
             <div>
-              <h2>Լուսանկարներ</h2>
-              <p>Նախ պահիր ապրանքախումբը — հետո նկար ավելացնելը հասանելի կլինի։</p>
+              <h2>{t.photos.title}</h2>
+              <p>{t.editor.photosLeadNew}</p>
             </div>
           </div>
         </div>
       ) : (
-        <Photos
-          slug={slug!}
-          images={images}
-          onChanged={setImages}
-          onError={onError}
-        />
+        <Photos slug={slug!} images={images} onChanged={setImages} onError={onError} />
       )}
 
       {/* Copy ───────────────────────────────────────────────────────────── */}
       <div className="card">
         <div className="card__head">
           <div>
-            <h2>Տեքստեր</h2>
-            <p>Դատարկ վերնագրով լեզուն կայք չի ուղարկվում։</p>
+            <h2>{t.editor.copyTitle}</h2>
+            <p>{t.editor.copyLead}</p>
           </div>
         </div>
 
         <div className="tabs">
-          {LOCALES.map((l) => (
+          {CONTENT_LOCALES.map((l) => (
             <button
               key={l}
               className={l === locale ? "tab tab--active" : "tab"}
               onClick={() => setLocale(l)}
             >
-              {LOCALE_LABELS[l]}
+              {CONTENT_LOCALE_LABELS[l]}
               {draft.translations[l].title.trim() === "" ? " ·" : ""}
             </button>
           ))}
         </div>
 
         <TextField
-          label="Վերնագիր"
+          label={t.editor.fieldTitle}
           value={copy.title}
           error={firstError("title")}
           onChange={(title) => patchCopy({ title })}
         />
 
         <TextArea
-          label="Կարճ նկարագրություն"
-          hint="քարտի տեքստը՝ 1–2 նախադասություն"
+          label={t.editor.fieldShort}
+          hint={t.editor.fieldShortHint}
           rows={2}
           value={copy.short ?? ""}
           onChange={(v) => patchCopy({ short: v || null })}
         />
 
         <TextField
-          label="Քարտի ներքևի տողը"
-          hint="ընտրության հուշում, օր․՝ «Ընտրություն ըստ բեռնվածության»"
+          label={t.editor.fieldBenefit}
+          hint={t.editor.fieldBenefitHint}
           value={copy.benefit ?? ""}
           onChange={(v) => patchCopy({ benefit: v || null })}
         />
 
         <TextArea
-          label="Ապրանքի էջի ներածական"
+          label={t.editor.fieldLead}
           rows={4}
           value={copy.lead ?? ""}
           onChange={(v) => patchCopy({ lead: v || null })}
         />
 
         <RowsEditor
-          label="Ամփոփում"
-          hint="«Ի՞նչ է լուծում», «Ո՞ւմ համար է», «Ինչպե՞ս ընտրել»"
-          addLabel="Ավելացնել տող"
+          t={t}
           rows={copy.overview}
           onChange={(overview) => patchCopy({ overview })}
         />
 
         <FeaturesEditor
+          t={t}
           features={copy.features}
           onChange={(features) => patchCopy({ features })}
         />
 
         <StringList
-          label="Բնութագրերի տողերը"
-          hint="միայն անվանումները — արժեքները լրացնում է ընկերությունը"
-          addLabel="Ավելացնել բնութագիր"
-          placeholder="Տրամագիծ, մմ"
+          label={t.editor.specs}
+          hint={t.editor.specsHint}
+          addLabel={t.editor.specsAdd}
+          placeholder={t.editor.specsPlaceholder}
           items={copy.specs}
           onChange={(specs) => patchCopy({ specs })}
         />
 
         <StringList
-          label="Մոդելներ"
-          hint="կոնկրետ տեսակները, եթե կան"
-          addLabel="Ավելացնել մոդել"
-          placeholder="ՓՈԽԱՆՑՄԱՆ ՓՈԿ - A"
+          label={t.editor.variants}
+          hint={t.editor.variantsHint}
+          addLabel={t.editor.variantsAdd}
+          placeholder={t.editor.variantsPlaceholder}
           items={copy.variants}
           onChange={(variants) => patchCopy({ variants })}
         />
@@ -368,12 +363,12 @@ export function ProductEditor({
 
       <div className="savebar">
         <span className="savebar__status">
-          {dirty ? "Չպահված փոփոխություններ կան։" : "Ամեն ինչ պահված է։"}
+          {dirty ? t.editor.dirty : t.editor.clean}
         </span>
         <div className="savebar__actions">
           {!isNew ? (
             <button className="btn btn--danger" onClick={() => void remove()}>
-              Ջնջել
+              {t.editor.delete}
             </button>
           ) : null}
           <button
@@ -381,7 +376,7 @@ export function ProductEditor({
             disabled={busy || (!dirty && !isNew)}
             onClick={() => void save()}
           >
-            {busy ? "Պահվում է…" : isNew ? "Ստեղծել" : "Պահել"}
+            {busy ? t.editor.saving : isNew ? t.editor.create : t.editor.save}
           </button>
         </div>
       </div>
@@ -391,15 +386,11 @@ export function ProductEditor({
 
 /** The "what it solves / who it is for / how to choose" rows. */
 function RowsEditor({
-  label,
-  hint,
-  addLabel,
+  t,
   rows,
   onChange,
 }: {
-  label: string;
-  hint: string;
-  addLabel: string;
+  t: Strings;
   rows: OverviewRow[];
   onChange: (rows: OverviewRow[]) => void;
 }) {
@@ -409,8 +400,8 @@ function RowsEditor({
   return (
     <div className="field">
       <span className="field__label">
-        {label}
-        <span className="field__hint">{hint}</span>
+        {t.editor.overview}
+        <span className="field__hint">{t.editor.overviewHint}</span>
       </span>
 
       {rows.map((row, i) => (
@@ -425,6 +416,7 @@ function RowsEditor({
               />
               <button
                 className="btn btn--danger btn--icon"
+                title={t.common.remove}
                 onClick={() => onChange(rows.filter((_, at) => at !== i))}
               >
                 ✕
@@ -432,12 +424,12 @@ function RowsEditor({
             </div>
           </div>
           <TextField
-            label="Վերնագիր"
+            label={t.editor.fieldTitle}
             value={row.title}
             onChange={(title) => set(i, { title })}
           />
           <TextArea
-            label="Տեքստ"
+            label={t.editor.fieldText}
             rows={2}
             value={row.text}
             onChange={(text) => set(i, { text })}
@@ -449,7 +441,7 @@ function RowsEditor({
         className="btn btn--ghost btn--small"
         onClick={() => onChange([...rows, { title: "", text: "" }])}
       >
-        + {addLabel}
+        + {t.editor.overviewAdd}
       </button>
     </div>
   );
@@ -457,9 +449,11 @@ function RowsEditor({
 
 /** Numbered advantage cards. */
 function FeaturesEditor({
+  t,
   features,
   onChange,
 }: {
+  t: Strings;
   features: FeatureCard[];
   onChange: (features: FeatureCard[]) => void;
 }) {
@@ -469,8 +463,8 @@ function FeaturesEditor({
   return (
     <div className="field">
       <span className="field__label">
-        Առավելություններ
-        <span className="field__hint">համարակալված քարտեր ապրանքի էջում</span>
+        {t.editor.features}
+        <span className="field__hint">{t.editor.featuresHint}</span>
       </span>
 
       {features.map((feature, i) => (
@@ -485,6 +479,7 @@ function FeaturesEditor({
               />
               <button
                 className="btn btn--danger btn--icon"
+                title={t.common.remove}
                 onClick={() => onChange(features.filter((_, at) => at !== i))}
               >
                 ✕
@@ -493,18 +488,18 @@ function FeaturesEditor({
           </div>
           <div className="row">
             <TextField
-              label="Համար"
+              label={t.editor.fieldNumber}
               value={feature.number}
               onChange={(number) => set(i, { number })}
             />
             <TextField
-              label="Վերնագիր"
+              label={t.editor.fieldTitle}
               value={feature.title}
               onChange={(title) => set(i, { title })}
             />
           </div>
           <TextArea
-            label="Տեքստ"
+            label={t.editor.fieldText}
             rows={2}
             value={feature.text}
             onChange={(text) => set(i, { text })}
@@ -525,7 +520,7 @@ function FeaturesEditor({
           ])
         }
       >
-        + Ավելացնել առավելություն
+        + {t.editor.featuresAdd}
       </button>
     </div>
   );

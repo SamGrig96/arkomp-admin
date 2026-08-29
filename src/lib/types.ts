@@ -1,10 +1,15 @@
 /** Mirrors Arkomp.Api/Contracts/Dtos.cs and the auth endpoints. */
 
+/** The languages the catalogue is written in — not the panel's own language. */
 export type Locale = "hy" | "ru";
 
-export const LOCALES: Locale[] = ["hy", "ru"];
+export const CONTENT_LOCALES: Locale[] = ["hy", "ru"];
 
-export const LOCALE_LABELS: Record<Locale, string> = {
+/**
+ * Each language named in itself, so the tabs read the same whichever language
+ * the panel is set to.
+ */
+export const CONTENT_LOCALE_LABELS: Record<Locale, string> = {
   hy: "Հայերեն",
   ru: "Русский",
 };

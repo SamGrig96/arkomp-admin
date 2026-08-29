@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChangePassword } from "./components/ChangePassword";
+import { LocaleSwitch } from "./components/LocaleSwitch";
 import { Login } from "./components/Login";
 import { ProductEditor } from "./components/ProductEditor";
 import { ProductList } from "./components/ProductList";
 import * as api from "./lib/api";
+import { describeError } from "./lib/errors";
+import { useT } from "./lib/i18n";
 import { SITE_URL } from "./lib/site";
 import type { AdminFamily, User } from "./lib/types";
 
@@ -32,6 +35,7 @@ const go = (hash: string) => {
 };
 
 export default function App() {
+  const t = useT();
   const [user, setUser] = useState<User | null>(null);
   // Nothing to check when there is no stored token, so the gate starts open.
   const [checking, setChecking] = useState(() => api.getToken() !== null);
@@ -52,11 +56,11 @@ export default function App() {
   useEffect(() => {
     const signedOut = () => {
       setUser(null);
-      setError("Մուտքի ժամկետը լրացել է։ Մուտք գործեք նորից։");
+      setError(t.app.sessionExpired);
     };
     window.addEventListener(api.SIGNED_OUT_EVENT, signedOut);
     return () => window.removeEventListener(api.SIGNED_OUT_EVENT, signedOut);
-  }, []);
+  }, [t]);
 
   // A token in storage still has to be checked: it may have expired, or the API
   // may have restarted with a new signing key.
@@ -74,17 +78,15 @@ export default function App() {
     api
       .listFamilies()
       .then(setFamilies)
-      .catch((e: unknown) =>
-        setError(e instanceof Error ? e.message : "Ուղղությունները չբեռնվեցին։"),
-      );
-  }, [user]);
+      .catch((e: unknown) => setError(describeError(e, t, t.app.familiesFailed)));
+  }, [user, t]);
 
   const showFlash = useCallback((message: string) => {
     setFlash(message);
     window.setTimeout(() => setFlash(null), 3000);
   }, []);
 
-  if (checking) return <div className="empty">Ստուգվում է…</div>;
+  if (checking) return <div className="empty">{t.app.checking}</div>;
 
   if (!user) {
     return (
@@ -103,15 +105,17 @@ export default function App() {
     <div className="shell">
       <header className="topbar">
         <span className="topbar__brand">
-          ԱՐԿՈՄՊ<span>կառավարում</span>
+          {t.app.brand}
+          <span>{t.app.subtitle}</span>
         </span>
-        <a href="#/products">Տեսականի</a>
+        <a href="#/products">{t.app.catalogue}</a>
         <a href={SITE_URL} target="_blank" rel="noreferrer">
-          Կայք ↗
+          {t.app.site}
         </a>
         <span className="topbar__spacer" />
+        <LocaleSwitch dark />
         <span className="topbar__user">{user.displayName}</span>
-        <a href="#/password">Գաղտնաբառ</a>
+        <a href="#/password">{t.app.password}</a>
         <a
           href="#/products"
           onClick={() => {
@@ -119,15 +123,14 @@ export default function App() {
             setUser(null);
           }}
         >
-          Ելք
+          {t.app.signOut}
         </a>
       </header>
 
       <main className="page">
         {user.mustChangePassword && route.name !== "password" ? (
           <div className="note note--warn">
-            Դու դեռ օգտագործում ես սկզբնական գաղտնաբառը։{" "}
-            <a href="#/password">Փոխիր այն</a>։
+            {t.app.seedWarning} <a href="#/password">{t.app.seedWarningLink}</a>
           </div>
         ) : null}
 
@@ -157,7 +160,7 @@ export default function App() {
           <ChangePassword
             onDone={(updated) => {
               setUser(updated);
-              showFlash("Գաղտնաբառը փոխվեց։");
+              showFlash(t.password.changed);
               go("#/products");
             }}
             onError={setError}

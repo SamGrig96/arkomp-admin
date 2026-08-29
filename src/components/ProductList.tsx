@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import * as api from "../lib/api";
-import type { AdminFamily, AdminProductRow } from "../lib/types";
+import { describeError } from "../lib/errors";
+import { useI18n } from "../lib/i18n";
 import { move } from "../lib/move";
+import type { AdminFamily, AdminProductRow } from "../lib/types";
 
 /**
  * The catalogue as the site prints it: one row per group, in site order, with
@@ -16,25 +18,28 @@ export function ProductList({
   onCreate: () => void;
   onError: (message: string) => void;
 }) {
+  const { t, locale } = useI18n();
   const [rows, setRows] = useState<AdminProductRow[] | null>(null);
   const [families, setFamilies] = useState<AdminFamily[]>([]);
   const [family, setFamily] = useState("");
   const [orderDirty, setOrderDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Product titles come from the API in one language; showing them in the one
+  // the panel is set to is the least surprising choice.
   const load = useCallback(async () => {
     try {
       const [products, fams] = await Promise.all([
-        api.listProducts("hy"),
+        api.listProducts(locale),
         api.listFamilies(),
       ]);
       setRows(products);
       setFamilies(fams);
       setOrderDirty(false);
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Չհաջողվեց բեռնել տեսականին։");
+      onError(describeError(e, t, t.list.loadFailed));
     }
-  }, [onError]);
+  }, [locale, onError, t]);
 
   // Fetching on mount: the setState calls inside load() happen after the await,
   // which the rule cannot see.
@@ -43,7 +48,7 @@ export function ProductList({
     void load();
   }, [load]);
 
-  if (!rows) return <div className="empty">Բեռնվում է…</div>;
+  if (!rows) return <div className="empty">{t.app.loading}</div>;
 
   const visible = family
     ? rows.filter((r) => r.product.family.slug === family)
@@ -60,7 +65,7 @@ export function ProductList({
       await api.reorderProducts(rows.map((r) => r.product.slug));
       setOrderDirty(false);
     } catch (e) {
-      onError(e instanceof Error ? e.message : "Հերթականությունը չպահվեց։");
+      onError(describeError(e, t, t.list.orderFailed));
     } finally {
       setSaving(false);
     }
@@ -70,10 +75,8 @@ export function ProductList({
     <>
       <div className="page__head">
         <div>
-          <h1>Տեսականի</h1>
-          <p>
-            {rows.length} ապրանքախումբ · {families.length} ուղղություն
-          </p>
+          <h1>{t.list.title}</h1>
+          <p>{t.list.summary(rows.length, families.length)}</p>
         </div>
         <div className="page__actions">
           <select
@@ -81,28 +84,28 @@ export function ProductList({
             style={{ width: 220 }}
             onChange={(e) => setFamily(e.target.value)}
           >
-            <option value="">Բոլոր ուղղությունները</option>
+            <option value="">{t.list.allFamilies}</option>
             {families.map((f) => (
               <option key={f.slug} value={f.slug}>
-                {f.labels.hy ?? f.slug} ({f.productCount})
+                {f.labels[locale] ?? f.slug} ({f.productCount})
               </option>
             ))}
           </select>
           <button className="btn btn--primary" onClick={onCreate}>
-            + Նոր ապրանքախումբ
+            {t.list.create}
           </button>
         </div>
       </div>
 
       {orderDirty ? (
         <div className="savebar" style={{ marginBottom: 16 }}>
-          <span className="savebar__status">Հերթականությունը փոխվել է։</span>
+          <span className="savebar__status">{t.list.orderChanged}</span>
           <div className="savebar__actions">
             <button className="btn btn--ghost" onClick={() => void load()}>
-              Չեղարկել
+              {t.list.cancel}
             </button>
             <button className="btn btn--primary" disabled={saving} onClick={saveOrder}>
-              {saving ? "Պահվում է…" : "Պահել հերթականությունը"}
+              {saving ? t.list.savingOrder : t.list.saveOrder}
             </button>
           </div>
         </div>
@@ -110,11 +113,11 @@ export function ProductList({
 
       <div className="list">
         <div className="list__row list__head">
-          <span>Նկար</span>
-          <span>Անվանում</span>
-          <span>Ուղղություն</span>
-          <span>Կարգավիճակ</span>
-          <span>Հերթ.</span>
+          <span>{t.list.colImage}</span>
+          <span>{t.list.colName}</span>
+          <span>{t.list.colFamily}</span>
+          <span>{t.list.colStatus}</span>
+          <span>{t.list.colOrder}</span>
         </div>
 
         {visible.map((row) => {
@@ -128,7 +131,7 @@ export function ProductList({
                   alt=""
                 />
               ) : (
-                <span className="list__thumb" title="Նկար չկա" />
+                <span className="list__thumb" title={t.list.noImage} />
               )}
 
               <div>
@@ -141,19 +144,19 @@ export function ProductList({
               <span className="list__meta">{row.product.family.label}</span>
 
               <span>
-                {row.isPublished ? null : <span className="badge badge--off">Թաքցված</span>}{" "}
+                {row.isPublished ? null : (
+                  <span className="badge badge--off">{t.list.hidden}</span>
+                )}{" "}
                 {row.product.featured ? (
-                  <span className="badge badge--featured">Գլխավոր</span>
+                  <span className="badge badge--featured">{t.list.featured}</span>
                 ) : null}{" "}
-                <span className="badge">
-                  {row.images} նկար
-                </span>
+                <span className="badge">{t.list.imageCount(row.images)}</span>
               </span>
 
               <span className="list__order">
                 <button
                   className="btn btn--ghost btn--icon"
-                  title="Վերև"
+                  title={t.common.up}
                   disabled={!canReorder || at === 0}
                   onClick={() => {
                     setRows(move(rows, at, at - 1));
@@ -164,7 +167,7 @@ export function ProductList({
                 </button>
                 <button
                   className="btn btn--ghost btn--icon"
-                  title="Ներքև"
+                  title={t.common.down}
                   disabled={!canReorder || at === rows.length - 1}
                   onClick={() => {
                     setRows(move(rows, at, at + 1));
@@ -181,7 +184,7 @@ export function ProductList({
 
       {!canReorder ? (
         <p className="muted" style={{ marginTop: 12 }}>
-          Հերթականությունը փոխելու համար ընտրիր «Բոլոր ուղղությունները»։
+          {t.list.reorderHint}
         </p>
       ) : null}
     </>

@@ -20,17 +20,29 @@ export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
+/** What went wrong, in a form the UI can translate. */
+export type ApiErrorCode = "offline" | "unauthorized" | "http";
+
 /**
  * Thrown for anything the API refuses. `fields` carries per-field messages when
  * the API answered with a validation problem, so forms can show them in place.
+ * The message is whatever the server said — English, and only a fallback; the
+ * screens translate `code` instead.
  */
 export class ApiError extends Error {
   status: number;
+  code: ApiErrorCode;
   fields: Record<string, string[]>;
 
-  constructor(message: string, status: number, fields: Record<string, string[]> = {}) {
+  constructor(
+    message: string,
+    status: number,
+    code: ApiErrorCode = "http",
+    fields: Record<string, string[]> = {},
+  ) {
     super(message);
     this.status = status;
+    this.code = code;
     this.fields = fields;
   }
 }
@@ -38,7 +50,7 @@ export class ApiError extends Error {
 /** Raised on 401 so the app can send the editor back to the sign-in screen. */
 export class SessionExpired extends ApiError {
   constructor() {
-    super("Մուտքի ժամկետը լրացել է։ Մուտք գործեք նորից։", 401);
+    super("The session has expired.", 401, "unauthorized");
   }
 }
 
@@ -70,10 +82,7 @@ async function request<T>(path: string, options: Options = {}): Promise<T> {
       body,
     });
   } catch {
-    throw new ApiError(
-      `API-ն հասանելի չէ (${API_URL})։ Ստուգեք՝ գործարկվա՞ծ է։`,
-      0,
-    );
+    throw new ApiError(`The API at ${API_URL} could not be reached.`, 0, "offline");
   }
 
   if (response.status === 401) {
@@ -98,11 +107,9 @@ async function request<T>(path: string, options: Options = {}): Promise<T> {
     } | null;
 
     throw new ApiError(
-      problem?.error ??
-        problem?.detail ??
-        problem?.title ??
-        `Սխալ ${response.status}`,
+      problem?.error ?? problem?.detail ?? problem?.title ?? "",
       response.status,
+      "http",
       problem?.errors ?? {},
     );
   }
