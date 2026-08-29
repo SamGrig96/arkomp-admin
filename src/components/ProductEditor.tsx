@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import * as api from "../lib/api";
 import { describeError } from "../lib/errors";
 import { useI18n, type Strings } from "../lib/i18n";
+import { findGaps, gapsIn } from "../lib/completeness";
 import { move } from "../lib/move";
 import { SITE_URL } from "../lib/site";
 import type {
@@ -126,6 +127,12 @@ export function ProductEditor({
     });
 
   const copy = draft.translations[locale];
+
+  // The same rule the API enforces, checked here so it can be said in the
+  // panel's language and before a round trip. Drafts are exempt: an
+  // unpublished group is exactly where half-translated copy belongs.
+  const gaps = findGaps(draft.translations);
+  const blocked = draft.isPublished && gaps.length > 0;
 
   async function save() {
     setBusy(true);
@@ -296,7 +303,7 @@ export function ProductEditor({
               onClick={() => setLocale(l)}
             >
               {CONTENT_LOCALE_LABELS[l]}
-              {draft.translations[l].title.trim() === "" ? " ·" : ""}
+              {gapsIn(gaps, l).length > 0 ? " ·" : ""}
             </button>
           ))}
         </div>
@@ -361,6 +368,21 @@ export function ProductEditor({
         />
       </div>
 
+      {blocked ? (
+        <div className="note note--warn">
+          <strong>{t.editor.bilingualTitle}</strong>
+          <p style={{ margin: "6px 0 10px" }}>{t.editor.bilingualLead}</p>
+          <ul style={{ margin: "0 0 10px", paddingLeft: 20 }}>
+            {gaps.map((gap) => (
+              <li key={`${gap.locale}.${gap.field}`}>
+                {CONTENT_LOCALE_LABELS[gap.locale]} — {t.editor.fieldNames[gap.field]}
+              </li>
+            ))}
+          </ul>
+          <p style={{ margin: 0 }}>{t.editor.bilingualUnpublish}</p>
+        </div>
+      ) : null}
+
       <div className="savebar">
         <span className="savebar__status">
           {dirty ? t.editor.dirty : t.editor.clean}
@@ -373,7 +395,7 @@ export function ProductEditor({
           ) : null}
           <button
             className="btn btn--primary"
-            disabled={busy || (!dirty && !isNew)}
+            disabled={busy || blocked || (!dirty && !isNew)}
             onClick={() => void save()}
           >
             {busy ? t.editor.saving : isNew ? t.editor.create : t.editor.save}

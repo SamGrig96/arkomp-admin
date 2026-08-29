@@ -51,6 +51,14 @@ the Russian copy can perfectly well be written with Armenian buttons around it.
 The copy tabs are therefore labelled in the languages themselves (Հայերեն,
 Русский) and stay that way whichever language the panel is set to.
 
+**Published means bilingual.** A group that is published has to carry a title in
+both languages, and anything written in one language has to be written in the
+other: a visitor who switches language should not land on a thinner page. Save
+is blocked until that holds, with the missing pieces listed, and a dot on the
+language tab shows which side is short. Untick «published» and the rule lifts —
+a draft never reaches the site, so it is the right place for work in progress.
+The API enforces the same rule, so nothing gets around it through Swagger.
+
 **Settings** — slug (the page's URL), direction, published, and shown on the home
 page. Renaming a slug changes the address of the live page.
 
